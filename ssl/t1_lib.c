@@ -1443,12 +1443,15 @@ SSL_TICKET_STATUS tls_decrypt_ticket(SSL *s, const unsigned char *etick,
      * checks on ticket.
      */
     mlen = HMAC_size(hctx);
+    fprintf(stderr, "stek_debug: HMAC_size = %lu\n", mlen);
     if (mlen == 0) {
         ret = SSL_TICKET_FATAL_ERR_OTHER;
         goto end;
     }
 
     /* Sanity check ticket length: must exceed keyname + IV + HMAC */
+    fprintf(stderr, "stek_debug: eticklen = %lu\n", eticklen);
+    fprintf(stderr, "stek_debug: eticklen check = %lu\n", TLSEXT_KEYNAME_LENGTH + EVP_CIPHER_CTX_iv_length(ctx) + mlen);
     if (eticklen <=
         TLSEXT_KEYNAME_LENGTH + EVP_CIPHER_CTX_iv_length(ctx) + mlen) {
         ret = SSL_TICKET_NO_DECRYPT;
@@ -1456,13 +1459,20 @@ SSL_TICKET_STATUS tls_decrypt_ticket(SSL *s, const unsigned char *etick,
     }
     eticklen -= mlen;
     /* Check HMAC of encrypted ticket */
-    if (HMAC_Update(hctx, etick, eticklen) <= 0
-        || HMAC_Final(hctx, tick_hmac, NULL) <= 0) {
+
+    int ret_HMAC_Update = HMAC_Update(hctx, etick, eticklen);
+    int ret_HMAC_Final = HMAC_Final(hctx, tick_hmac, NULL);
+    fprintf(stderr, "stek_debug: HMAC_Update = %d\n", ret_HMAC_Update);
+    fprintf(stderr, "stek_debug: HMAC_Final = %d\n", ret_HMAC_Final);
+    if (ret_HMAC_Update <= 0
+        || ret_HMAC_Final <= 0) {
         ret = SSL_TICKET_FATAL_ERR_OTHER;
         goto end;
     }
 
-    if (CRYPTO_memcmp(tick_hmac, etick + eticklen, mlen)) {
+    int ret_CRYPTO_memcmp = CRYPTO_memcmp(tick_hmac, etick + eticklen, mlen);
+    fprintf(stderr, "stek_debug: CRYPTO_memcmp = %d\n", ret_CRYPTO_memcmp);
+    if (ret_CRYPTO_memcmp) {
         ret = SSL_TICKET_NO_DECRYPT;
         goto end;
     }
@@ -1471,13 +1481,18 @@ SSL_TICKET_STATUS tls_decrypt_ticket(SSL *s, const unsigned char *etick,
     p = etick + TLSEXT_KEYNAME_LENGTH + EVP_CIPHER_CTX_iv_length(ctx);
     eticklen -= TLSEXT_KEYNAME_LENGTH + EVP_CIPHER_CTX_iv_length(ctx);
     sdec = OPENSSL_malloc(eticklen);
-    if (sdec == NULL || EVP_DecryptUpdate(ctx, sdec, &slen, p,
-                                          (int)eticklen) <= 0) {
+
+    int ret_EVP_DecryptUpdate = EVP_DecryptUpdate(ctx, sdec, &slen, p, (int)eticklen);
+    fprintf(stderr, "stek_debug: EVP_DecryptUpdate = %d\n", ret_EVP_DecryptUpdate);
+    if (sdec == NULL || ret_EVP_DecryptUpdate <= 0) {
         OPENSSL_free(sdec);
         ret = SSL_TICKET_FATAL_ERR_OTHER;
         goto end;
     }
-    if (EVP_DecryptFinal(ctx, sdec + slen, &declen) <= 0) {
+
+    int ret_EVP_DecryptFinal = EVP_DecryptFinal(ctx, sdec + slen, &declen);
+    fprintf(stderr, "stek_debug: EVP_DecryptFinal = %d\n", ret_EVP_DecryptFinal);
+    if (ret_EVP_DecryptFinal <= 0) {
         OPENSSL_free(sdec);
         ret = SSL_TICKET_NO_DECRYPT;
         goto end;
@@ -1510,6 +1525,8 @@ SSL_TICKET_STATUS tls_decrypt_ticket(SSL *s, const unsigned char *etick,
             ret = SSL_TICKET_SUCCESS_RENEW;
         else
             ret = SSL_TICKET_SUCCESS;
+
+        fprintf(stderr, "stek_debug: session found\n");
         goto end;
     }
     ERR_clear_error();
